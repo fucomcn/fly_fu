@@ -1,0 +1,9 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://maven.parchmentmc.org' } // 可选，如果用到Parchment映射
+    }
+}
+
+rootProject.name = 'fly_fu'

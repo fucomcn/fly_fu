@@ -1,0 +1,25 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+
+[[mods]]
+modId = "fly_fu"
+version = "1.0"
+displayName = "Fly Fu"
+description = "Survival flight with no inertia, ground-safe, configurable speeds."
+authors = ["YourName"]
+logoFile = ""
+
+[[dependencies.fly_fu]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.fly_fu]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1]"
+ordering = "NONE"
+side = "BOTH"
