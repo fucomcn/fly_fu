@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+issueTrackerURL="https://github.com/yourusername/fly_fu/issues"
+
+[[mods]]
+modId="fly_fu"
+version="1.0.0"
+displayName="Fly Fu"
+authors="Your Name"
+description="A simple flight mod for Minecraft 1.20.1 Forge"
+displayURL="https://github.com/yourusername/fly_fu"
+logoFile="fly_fu.png"
+
+[[dependencies.fly_fu]]
+modId="forge"
+mandatory=true
+versionRange="[47.0.0,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.fly_fu]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="CLIENT"
