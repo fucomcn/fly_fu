@@ -4,26 +4,28 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingFallEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.fu.fly_fu.Fly_fu;
-import org.fu.fly_fu.config.ModConfig;
+import org.fu.fly_fu.config.FlyConfig;
 import org.fu.fly_fu.keybind.KeyBindings;
 
-@Mod.EventBusSubscriber(modid = Fly_fu.MOD_ID, value = net.minecraftforge.api.distmarker.Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = Fly_fu.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class EventHandler {
     private static boolean flightEnabled = false;
-    private static boolean wasOnGround = false;
+    private static boolean lastKeyPressed = false;
 
     @SubscribeEvent
     public static void onKeyInput(InputEvent.Key event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.screen != null) return;
 
-        // 处理飞行切换按键
-        if (KeyBindings.toggleFlight.consumeClick()) {
+        boolean currentPressed = KeyBindings.TOGGLE_FLIGHT.get().isDown();
+        if (currentPressed && !lastKeyPressed) {
             toggleFlight(mc.player);
         }
+        lastKeyPressed = currentPressed;
     }
 
     @SubscribeEvent
@@ -33,52 +35,18 @@ public class EventHandler {
         Player player = event.player;
         Minecraft mc = Minecraft.getInstance();
 
-        // 只处理本地玩家
-        if (player != mc.player) return;
-
-        // 保持生存模式下的飞行权限
-        if (flightEnabled) {
-            player.getAbilities().mayfly = true;
-            player.getAbilities().flying = true;
+        if (player.level().isClientSide && player == mc.player) {
+            updateFlightState(player, mc);
         }
+    }
 
-        // 触地不关闭飞行
-        if (ModConfig.KEEP_FLIGHT_ON_GROUND.get() && flightEnabled) {
-            if (player.onGround() && !wasOnGround) {
-                // 刚接触地面时，重新启用飞行
-                player.getAbilities().flying = true;
-                player.onGround = false; // 防止游戏自动关闭飞行
-            }
-        }
-        wasOnGround = player.onGround();
-
-        // 取消飞行惯性
-        if (ModConfig.DISABLE_FLIGHT_INERTIA.get() && player.getAbilities().flying) {
-            // 水平惯性取消
-            if (!player.input.forwardImpulse && !player.input.leftImpulse &&
-                    !player.input.backwardImpulse && !player.input.rightImpulse) {
-                player.setDeltaMovement(player.getDeltaMovement().multiply(0, 1, 0));
-            }
-
-            // 垂直惯性取消
-            if (!player.input.jumping && !player.input.shiftKeyDown) {
-                player.setDeltaMovement(player.getDeltaMovement().multiply(1, 0, 1));
-            }
-        }
-
-        // 应用自定义飞行速度
-        if (player.getAbilities().flying) {
-            // 水平速度
-            float horizontalSpeed = 0.05f * ModConfig.HORIZONTAL_FLIGHT_SPEED.get().floatValue();
-            player.getAbilities().setFlyingSpeed(horizontalSpeed);
-
-            // 垂直速度
-            double verticalSpeed = 0.06 * ModConfig.VERTICAL_FLIGHT_SPEED.get();
-            if (player.input.jumping) {
-                player.setDeltaMovement(player.getDeltaMovement().add(0, verticalSpeed, 0));
-            }
-            if (player.input.shiftKeyDown) {
-                player.setDeltaMovement(player.getDeltaMovement().add(0, -verticalSpeed, 0));
+    // ✅ 新增：开启飞行时完全免疫摔落伤害
+    @SubscribeEvent
+    public static void onLivingFall(LivingFallEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            Minecraft mc = Minecraft.getInstance();
+            if (player == mc.player && flightEnabled) {
+                event.setCanceled(true);
             }
         }
     }
@@ -89,13 +57,53 @@ public class EventHandler {
         if (flightEnabled) {
             player.getAbilities().mayfly = true;
             player.getAbilities().flying = true;
-            player.displayClientMessage(net.minecraft.network.chat.Component.literal("Flight enabled"), true);
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("§a✓ 飞行已开启 (免疫摔落)"), true);
         } else {
-            player.getAbilities().mayfly = false;
             player.getAbilities().flying = false;
-            player.displayClientMessage(net.minecraft.network.chat.Component.literal("Flight disabled"), true);
+            player.getAbilities().mayfly = false;
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("§c✗ 飞行已关闭"), true);
+        }
+        player.onUpdateAbilities();
+    }
+
+    private static void updateFlightState(Player player, Minecraft mc) {
+        if (!flightEnabled) return;
+
+        // 强制保持飞行
+        player.getAbilities().mayfly = true;
+        player.getAbilities().flying = true;
+
+        // 触地不关闭飞行
+        if (FlyConfig.KEEP_FLIGHT_ON_GROUND.get() && player.onGround()) {
+            player.getAbilities().flying = true;
         }
 
-        player.onUpdateAbilities();
+        var input = mc.player.input;
+        double vSpeed = FlyConfig.VERTICAL_SPEED.get();
+
+        // ✅ 完全修复垂直速度配置无效问题
+        // 直接覆盖游戏默认垂直速度，而不是叠加
+        if (player.getAbilities().flying) {
+            if (input.jumping) {
+                // 创造模式默认垂直速度是0.06，乘以配置倍数
+                player.setDeltaMovement(player.getDeltaMovement().x, 0.06 * vSpeed, player.getDeltaMovement().z);
+            } else if (input.shiftKeyDown) {
+                player.setDeltaMovement(player.getDeltaMovement().x, -0.06 * vSpeed, player.getDeltaMovement().z);
+            } else if (FlyConfig.DISABLE_INERTIA.get()) {
+                // 无惯性时垂直速度直接置0
+                player.setDeltaMovement(player.getDeltaMovement().x, 0, player.getDeltaMovement().z);
+            }
+        }
+
+        // 取消水平飞行惯性
+        if (FlyConfig.DISABLE_INERTIA.get() && player.getAbilities().flying) {
+            if (!input.up && !input.down && !input.left && !input.right) {
+                player.setDeltaMovement(0, player.getDeltaMovement().y, 0);
+            }
+        }
+
+        // 应用自定义水平飞行速度
+        float hSpeed = FlyConfig.HORIZONTAL_SPEED.get().floatValue();
+        player.getAbilities().setFlyingSpeed(0.05F * hSpeed);
     }
 }
