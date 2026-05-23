@@ -40,7 +40,6 @@ public class EventHandler {
         }
     }
 
-    // ✅ 新增：开启飞行时完全免疫摔落伤害
     @SubscribeEvent
     public static void onLivingFall(LivingFallEvent event) {
         if (event.getEntity() instanceof Player player) {
@@ -81,16 +80,20 @@ public class EventHandler {
         var input = mc.player.input;
         double vSpeed = FlyConfig.VERTICAL_SPEED.get();
 
-        // ✅ 完全修复垂直速度配置无效问题
-        // 直接覆盖游戏默认垂直速度，而不是叠加
+        // ✅ 完全修复Shift+空格悬停问题
+        // 优先处理同时按键的情况
         if (player.getAbilities().flying) {
-            if (input.jumping) {
-                // 创造模式默认垂直速度是0.06，乘以配置倍数
+            if (input.jumping && input.shiftKeyDown) {
+                // 同时按下跳跃和下蹲：完全静止悬停
+                player.setDeltaMovement(player.getDeltaMovement().x, 0, player.getDeltaMovement().z);
+            } else if (input.jumping) {
+                // 只按跳跃：向上飞
                 player.setDeltaMovement(player.getDeltaMovement().x, 0.06 * vSpeed, player.getDeltaMovement().z);
             } else if (input.shiftKeyDown) {
+                // 只按下蹲：向下飞
                 player.setDeltaMovement(player.getDeltaMovement().x, -0.06 * vSpeed, player.getDeltaMovement().z);
             } else if (FlyConfig.DISABLE_INERTIA.get()) {
-                // 无惯性时垂直速度直接置0
+                // 都没按且无惯性：垂直速度置0
                 player.setDeltaMovement(player.getDeltaMovement().x, 0, player.getDeltaMovement().z);
             }
         }
